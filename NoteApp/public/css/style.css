@@ -1,0 +1,36 @@
+/* Navbar button custom */
+.navbar .btn-custom {
+  padding: 0.375rem 0.75rem;
+  border: 2px solid #ffffff;
+  border-radius: 50px;
+  color: #ffffff;
+  background-color: transparent;
+  transition: all 0.3s ease;
+}
+
+.navbar .btn-custom:hover {
+  background-color: #ffffff;
+  color: #0d6efd;
+  border-color: #ffffff;
+  text-decoration: none;
+}
+
+/* Navbar link hover for uniformity */
+.navbar-nav .nav-link {
+  transition: color 0.3s ease, background-color 0.3s ease;
+}
+
+.navbar-nav .nav-link:hover {
+  color: #ffd166;
+}
+
+/* Active nav link */
+.navbar-nav .nav-link.active {
+  color: #ffd166;
+  font-weight: bold;
+}
+
+/* Optional: Brand hover effect */
+.navbar-brand:hover {
+  color: #ffd166;
+}

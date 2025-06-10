@@ -1,0 +1,42 @@
+
+<% title = "My Notes" %>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1>My Notes</h1>
+  <a href="/notes/new" class="btn btn-primary">+ Add New Note</a>
+</div>
+
+<% if (notes.length === 0) { %>
+  <p class="text-muted">You have no notes yet. Create your first note!</p>
+<% } else { %>
+  <div class="row row-cols-1 row-cols-md-3 g-4">
+    <% notes.forEach(note => { %>
+      <div class="col">
+        <div class="card h-100 shadow-sm">
+          <div class="card-body d-flex flex-column">
+            <h5 class="card-title"><%= note.title %></h5>
+            <p class="card-text text-truncate"><%= note.content %></p>
+            <div class="mt-auto">
+              <a href="/notes/<%= note._id %>" class="btn btn-outline-primary btn-sm me-2"
+                >View</a
+              >
+              <a href="/notes/<%= note._id %>/edit" class="btn btn-outline-secondary btn-sm"
+                >Edit</a
+              >
+              <form
+                action="/notes/<%= note._id %>?_method=DELETE"
+                method="POST"
+                class="d-inline"
+                onsubmit="return confirm('Are you sure you want to delete this note?');"
+              >
+                <button type="submit" class="btn btn-outline-danger btn-sm">
+                  Delete
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+    <% }) %>
+  </div>
+<% } %>
