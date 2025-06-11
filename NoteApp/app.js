@@ -43,10 +43,6 @@ app.use((req, res, next) => { //Middleware runs for every request.
   next();  //If no logged-in user, userId is null.
 });
 
-// Nodemailer Transport Setup
-console.log("GMAIL_USER:", process.env.GMAIL_USER);
-console.log("GMAIL_APP_PASSWORD:", process.env.GMAIL_APP_PASSWORD);
-
 const transporter = nodemailer.createTransport({
   service: "gmail",
   auth: {
@@ -66,14 +62,14 @@ app.get("/", (req, res) => res.redirect("/notes"));
 
 // Notes Routes
 app.get("/notes", requireLogin, asyncWrap(async (req, res) => {
-  const notes = await Note.find({ user: req.session.userId });
+  const notes = await Note.find({ user: req.session.userId }); //find all Notes whose user field is equal to the logged-in user’s id (stored in req.session.userId).
   res.render("notes/index.ejs", { notes });
 }));
 
 
 // Show form to create new note
 app.get("/notes/new", requireLogin, (req, res) => {
-  res.render("notes/new");
+  res.render("notes/new.ejs");
 });
 
 // Create new note for logged-in user
@@ -90,17 +86,18 @@ app.post("/notes", requireLogin, asyncWrap(async (req, res) => {
 
 app.get("/notes/:id", requireLogin, asyncWrap(async (req, res) => {
   try {
-    const note = await Note.findOne({ _id: req.params.id, user: req.session.userId });
+    const note = await Note.findOne({ _id: req.params.id, user: req.session.userId });  //_id = req.params.id and user = req.session.userId ensures a user can only view their own notes .If no note is found → 404 page rendered
     
     if (!note) {
-      return res.status(404).render("404", { message: "Note not found!" });
+      return res.status(404).render("404.ejs", { message: "Note not found!" });//// it does not go to error handller ,handeles error locally
+
     }
 
     console.log('Note:', note);
-    res.render("notes/show", { note });
-  } catch (err) {
+    res.render("notes/show.ejs", { note });
+  } catch (err) {    //Use try...catch When you want to handle the error locally (like custom log, response, render) before falling back to the global handler
     console.error(err);
-    res.status(500).send("Server error");
+    res.status(500).send("Server error");  
   }
 }));
 
@@ -111,19 +108,19 @@ app.get("/notes/:id/edit", requireLogin, asyncWrap(async (req, res) => {
   if (!note) {
     return res.status(404).render("404", { message: "Note not found!" });
   }
-  res.render("notes/edit", { note });
+  res.render("notes/edit.ejs", { note });
 }));
 
 // Update note - Only if it belongs to the logged-in user
 app.put("/notes/:id", requireLogin, asyncWrap(async (req, res) => {
   const { title, content } = req.body;
   const note = await Note.findOneAndUpdate(
-    { _id: req.params.id, user: req.session.userId },
-    { title, content },
-    { new: true }
+    { _id: req.params.id, user: req.session.userId },  //Find a document that matches the filter criteria (in the first argument)
+    { title, content }, //Update it with the new values (second argument)
+    { new: true }  //Tells Mongoose to return the updated document rather than the original one
   );
   if (!note) {
-    return res.status(404).render("404", { message: "Note not found!" });
+    return res.status(404).render("404.ejs", { message: "Note not found!" });
   }
   res.redirect("/notes");
 }));
@@ -133,17 +130,22 @@ app.delete("/notes/:id", requireLogin, asyncWrap(async (req, res) => {
   const note = await Note.findOneAndDelete({ _id: req.params.id, user: req.session.userId });
   if (!note) {
     return res.status(404).render("404", { message: "Note not found!" });
-  }
+    }
   res.redirect("/notes");
 }));
 
 
 // Signup
-app.get("/signup", (req, res) => res.render("auth/signup"));
+app.get("/signup", (req, res) => res.render("auth/signup.ejs"));
 
 app.post("/signup", asyncWrap(async (req, res) => {
   const { email } = req.body;
-  const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+  // 👉 Check if user already exists
+  const existingUser = await User.findOne({ email });
+  if (existingUser) {
+    return res.send("Email already registered. Please login.");
+  }
+  const otpCode = Math.floor(100000 + Math.random() * 900000).toString(); //Generates a random 6-digit number between 100000 and 999999.Converts it to string since we'll send it via email and store it in DB.
 
   await OTP.create({ userIdentifier: email, otp: otpCode, createdAt: new Date() });
 
@@ -154,12 +156,12 @@ app.post("/signup", asyncWrap(async (req, res) => {
     text: `Your OTP is ${otpCode}.`
   });
 
-  req.session.userIdentifier = email;
+  req.session.userIdentifier = email; //It adds or updates a key called userIdentifier in the session for the current user’s session./Saves email into session so you can identify this signup flow when user verifies OTP
   console.log("✅ Signup - Session userIdentifier set to:", req.session.userIdentifier);
 
   // 📌 Important: Save session before redirecting
   req.session.save((err) => {
-    if (err) {
+    if (err) {  //You set req.session.userIdentifier = email; to store the email.Then you call req.session.save() to immediately persist that change before redirecting — ensuring when the user lands on /verify-otp, their session contains userIdentifier.
       console.error("❌ Error saving session:", err);
       return res.send("Session error");
     }
@@ -172,7 +174,7 @@ app.post("/signup", asyncWrap(async (req, res) => {
 // Verify OTP
 app.get("/verify-otp", (req, res) => {
   console.log("📝 GET /verify-otp → session userIdentifier:", req.session.userIdentifier);
-  res.render("auth/verify-otp");
+  res.render("auth/verify-otp.ejs");
 });
 
 
@@ -183,7 +185,7 @@ app.post("/verify-otp", asyncWrap(async (req, res) => {
   console.log("📦 req.body:", req.body);
 
   const { otp } = req.body;
-  const email = req.session.userIdentifier;
+  const email = req.session.userIdentifier;//Gets the email stored in session
 
   console.log("📧 Session Email:", email);
   console.log("🔢 Entered OTP:", otp);
@@ -193,24 +195,25 @@ app.post("/verify-otp", asyncWrap(async (req, res) => {
     return res.send("Session expired or email not found.");
   }
 
-  const otpRecords = await OTP.find({ userIdentifier: email }).sort({ createdAt: -1 });
+  const otpRecords = await OTP.find({ userIdentifier: email }).sort({ createdAt: -1 }); //Fetches all OTP records for that email, sorted by newest first.
   console.log("📜 All OTP records for this email:", otpRecords);
 
   if (otpRecords.length === 0) return res.send("No OTP record found.");
 
-  const latestOtp = otpRecords[0];
+  const latestOtp = otpRecords[0];//Picks the latest OTP (first element of the sorted array)
   console.log("✅ Latest OTP from DB:", latestOtp.otp);
 
-  if (latestOtp.otp !== otp) {
+  if (latestOtp.otp !== otp) { //Compares the latest OTP from the database with the one entered by the user.
     console.log("❌ OTP Mismatch");
     return res.send("Invalid OTP");
   }
 
-  await OTP.deleteOne({ _id: latestOtp._id });
+  await OTP.deleteOne({ _id: latestOtp._id });  //Deletes the OTP record after successful verification (so it can’t be reused)
   console.log("🗑️ OTP record deleted");
 
-  req.session.tempUserIdentifier = email;
-  console.log("🎉 OTP verified, session updated");
+  req.session.tempUserIdentifier = email;  //Saves tempUserIdentifier into the session. (You might later use this in /set-password route to associate the password setup with this verified email)
+  
+console.log("🎉 OTP verified, session updated");
 
   res.redirect("/set-password");
 }));
@@ -218,31 +221,33 @@ app.post("/verify-otp", asyncWrap(async (req, res) => {
 
 
 // Set Password
-app.get("/set-password", (req, res) => res.render("auth/set-password"));
+app.get("/set-password", (req, res) => res.render("auth/set-password.ejs"));
 
 app.post("/set-password", asyncWrap(async (req, res) => {
-  const { password } = req.body;
-  const hashed = await bcrypt.hash(password, 12);
+  const { password } = req.body; //This takes the password entered by the user from the form submission
+  const hashed = await bcrypt.hash(password, 12); //Uses bcrypt to hash the password with a salt rounds value of 12 (which makes it securely hashed before storing in the database).
   const user = new User({ email: req.session.tempUserIdentifier, password: hashed });
   await user.save();
 
   req.session.userId = user._id;
+  
   res.redirect("/notes");
 }));
 
 // Login
-app.get("/login", (req, res) => res.render("auth/login"));
+app.get("/login", (req, res) => res.render("auth/login.ejs"));
 
-app.post("/login", asyncWrap(async (req, res) => {
+app.post("/login", asyncWrap(async (req, res) => { // Listens for a POST request when the login form is submitted
   const { email, password } = req.body;
-  const user = await User.findOne({ email });
+  const user = await User.findOne({ email });//Searches your users collection for a user document with a matching email.
   if (!user) return res.send("No user");
 
   const valid = await bcrypt.compare(password, user.password);
   if (!valid) return res.send("Invalid Password");
 
-  req.session.userId = user._id;
-  res.redirect("/notes");
+  req.session.userId = user._id; //this line saves the logged-in user’s _id in the session under the key userId.
+  if (!req.session.userId) return res.redirect("/login");
+  res.redirect("/notes"); 
 }));
 
 // Logout
@@ -252,14 +257,14 @@ app.get("/logout", (req, res) => {
 });
 
 // 404 Handler
-app.use((req, res) => res.status(404).render("404", { message: "Page not found!" }));
+app.use((req, res) => res.status(404).render("404.ejs", { message: "Page not found!" })); //If none of the defined routes above it match the incoming request URL, this middleware gets triggered.
 
 // Error Handler
 app.use((err, req, res, next) => {
-  console.error(err);
-  const { status = 500, message = "Something went wrong!" } = err;
-  res.status(status).render("404", { message });
-});
+  console.error(err); //Logs the error details (stack trace, status, message etc) in your terminal console for debugging.
+  const { status = 500, message = "Something went wrong!" } = err;  //Destructuring assignment to extract status and message from the err object. If those properties don’t exist on the err object, it uses: 500 as default HTTP status (Internal Server Error)"Something went wrong!" as a default error message
+  res.status(status).render("404.ejs", { message });  //res.status(status) → Sets the HTTP response status code to whatever status we just got.
+});  //If you call next(err) or an error happens inside an asyncWrap()-wrapped route, the error is passed here.
 
 // Server Start
 app.listen(8080, () => console.log("Server running on 8080"));
